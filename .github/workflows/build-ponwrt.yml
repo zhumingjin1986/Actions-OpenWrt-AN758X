@@ -1020,7 +1020,7 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           cd "$BUILD_ROOT/openwrt"
-          KEY="${{ steps.host-cache-key.outputs.HOST_CACHE_KEY }}"
+          KEY='${{ steps.host-cache-key.outputs.HOST_CACHE_KEY }}'
           [ -z "$KEY" ] && { echo "restored=false" >> "$GITHUB_OUTPUT"; exit 0; }
 
           mkdir -p "$HOST_CACHE_DIR"
@@ -1061,7 +1061,7 @@ jobs:
           && steps.host-cache-key.outputs.skip != 'true'
         run: |
           cd "$BUILD_ROOT/openwrt"
-          KEY="${{ steps.host-cache-key.outputs.HOST_CACHE_KEY }}"
+          KEY='${{ steps.host-cache-key.outputs.HOST_CACHE_KEY }}'
           TARBALL="$HOST_CACHE_DIR/${KEY}.tzst"
           if [ ! -f "$TARBALL" ]; then
             echo "unpacked=false" >> "$GITHUB_OUTPUT"
@@ -1096,7 +1096,7 @@ jobs:
           cd "$BUILD_ROOT/openwrt"
           JOBS=$(awk -v p="$(nproc)" '/^MemAvailable:/{m=int($2/2097152)+1} END{print m<p?m:p}' /proc/meminfo)
           JOBS=$(( JOBS < 1 ? 1 : JOBS ))
-          HOST_CACHE_KEY="${{ steps.host-cache-key.outputs.HOST_CACHE_KEY }}" \
+          HOST_CACHE_KEY='${{ steps.host-cache-key.outputs.HOST_CACHE_KEY }}' \
           HOST_INCLUDE_BUILDDIR="$HOST_INCLUDE_BUILDDIR" \
           JOBS="$JOBS" \
             bash "$GITHUB_WORKSPACE/scripts/host-toolchain.sh" build "$BUILD_ROOT/openwrt"
@@ -1109,7 +1109,7 @@ jobs:
           && steps.host-build.outputs.host_build_failed == 'false'
         run: |
           cd "$BUILD_ROOT/openwrt"
-          HOST_CACHE_KEY="${{ steps.host-cache-key.outputs.HOST_CACHE_KEY }}" \
+          HOST_CACHE_KEY='${{ steps.host-cache-key.outputs.HOST_CACHE_KEY }}' \
           HOST_INCLUDE_BUILDDIR="$HOST_INCLUDE_BUILDDIR" \
             bash "$GITHUB_WORKSPACE/scripts/host-toolchain.sh" pack "$BUILD_ROOT/openwrt"
 
@@ -1160,7 +1160,7 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          KEY="${{ steps.host-cache-key.outputs.HOST_CACHE_KEY }}"
+          KEY='${{ steps.host-cache-key.outputs.HOST_CACHE_KEY }}'
           PREFIX="${{ steps.host-cache-key.outputs.HOST_CACHE_PREFIX }}"
           TARBALL="$HOST_CACHE_DIR/${KEY}.tzst"
           if [ ! -f "$TARBALL" ]; then

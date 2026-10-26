@@ -56,6 +56,41 @@ pkg_version_mk() {  # $1=Makefile 路径 → GO_VERSION 优先，其次 PKG_VERS
   sed -n 's/^GO_VERSION:=[[:space:]]*//p' "$1" 2>/dev/null | head -1 | tr -d '"'
 }
 
+# ---------------------------------------------------------------
+# 让 make 自己展开变量。
+#
+#   踩过的坑：golang 的 Makefile 里写的是
+#     GO_VERSION:=$(GO_DEFAULT_VERSION)
+#   直接 sed 取出来是字面量 "$(GO_DEFAULT_VERSION)"；它原样进了缓存 key，
+#   再被 workflow 塞回 shell（KEY="...-go$(GO_DEFAULT_VERSION)-..."），
+#   bash 当场当成命令替换执行 → GO_DEFAULT_VERSION: command not found。
+#
+#   所以：先让 make 展开，取不到再退回 sed 字面量，最后由 sanitize 兜底。
+# ---------------------------------------------------------------
+make_var() {  # $1=Makefile 路径 $2=变量名
+  local mk="$1" var="$2" tmp
+  [ -f "$mk" ] || return 0
+  tmp=$(mktemp)
+  # ⚠ 两个讲究：
+  #   1) 配方行必须以真实 TAB 开头，所以整段用 cat heredoc 写，
+  #      不用 printf（printf 会把 \n 解释成真换行，把配方行劈成两截）；
+  #   2) $(VAR) 外面套单引号：make 展开后交给 shell 打印时，
+  #      单引号能挡住值里的反引号 / $() 被 shell 再执行一次
+  #      （实测过：写成 echo "$(VAR)" 的话，值里的 `cmd` 会被真跑）。
+  cat > "$tmp" <<MAKE
+include $mk
+ci-print:
+	@printf '%s\n' '\$($var)'
+MAKE
+  make --no-print-directory -s -f "$tmp" TOPDIR="$PWD" ci-print 2>/dev/null | head -1
+  rm -f "$tmp"
+}
+
+# key 只接受 [A-Za-z0-9._-]，其余一律换成下划线。
+# 这是最后一道保险：不管上游 Makefile 写出什么花样（含 $() 、反引号、
+# 空格、引号），都不会变成 shell 语法被 workflow 里的 KEY="..." 执行。
+sanitize() { printf '%s' "$1" | tr -c 'A-Za-z0-9._-' '_'; }
+
 # GO_REL / RUST_REL 是相对 package/ 的路径（make target 用）；
 # 读版本与算 hash 要的是绝对路径，两者别混用。
 GO_REL=$(probe_pkg golang)
@@ -71,12 +106,22 @@ RUST_MK="${RUST_REL:+package/$RUST_REL/Makefile}"
 [ -n "$GO_MK" ] || GO_MK="$FEED_GO_MK"
 [ -n "$RUST_MK" ] || RUST_MK="$FEED_RUST_MK"
 
-GO_VER=$(pkg_version_mk "$GO_MK")
-RUST_VER=$(pkg_version_mk "$RUST_MK")
-[ -n "$GO_VER" ] || GO_VER=$(sed -n 's/^PKG_VERSION:=[[:space:]]*//p' "$GO_MK" 2>/dev/null | head -1 | tr -d '"')
+# 先让 make 展开（能解析 GO_VERSION:=$(GO_DEFAULT_VERSION) 这类间接定义），
+# 展开不出来（Makefile 顶部 include 一堆 rules.mk 时常见）再退回 sed 字面量。
+GO_VER=$(make_var "$GO_MK" GO_VERSION)
+RUST_VER=$(make_var "$RUST_MK" PKG_VERSION)
+[ -n "$GO_VER" ] || GO_VER=$(pkg_version_mk "$GO_MK")
 [ -n "$RUST_VER" ] || RUST_VER=$(sed -n 's/^PKG_VERSION:=[[:space:]]*//p' "$RUST_MK" 2>/dev/null | head -1 | tr -d '"')
-[ -n "$GO_VER" ] || GO_VER="none"
-[ -n "$RUST_VER" ] || RUST_VER="none"
+
+# 展开出来还是含 $() 的（说明 make 也没解析出来）→ 不硬猜，标 unknown。
+# 版本只影响 key 的可读部分，Makefile 的 md5 已经在 hash 里，
+# 版本真变了 key 照样会变，不会复用错缓存。
+case "$GO_VER"   in *'$('*|'' ) GO_VER=unknown   ;; esac
+case "$RUST_VER" in *'$('*|'' ) RUST_VER=unknown ;; esac
+
+# ★ 强制白名单：这是防「$(...) 被 workflow 的 KEY="..." 当命令执行」的最后一道
+GO_VER=$(sanitize "$GO_VER")
+RUST_VER=$(sanitize "$RUST_VER")
 
 HAS_GO=$([ -n "$GO_REL" ] && echo true || echo false)
 HAS_RUST=$([ -n "$RUST_REL" ] && echo true || echo false)
@@ -106,8 +151,10 @@ key)
   GO_TAG=$(printf '%s' "$GO_VER" | tr '.' '_')
   RUST_TAG=$(printf '%s' "$RUST_VER" | tr '.' '_')
 
-  KEY="ponwrt-hosttools-${TARGET}-${SUBTARGET}-go${GO_TAG}-rs${RUST_TAG}-${HASH:0:16}"
-  PREFIX="ponwrt-hosttools-${TARGET}-${SUBTARGET}"
+  # 整串再过一遍白名单：TARGET/SUBTARGET 来自 .config，理论上干净，
+  # 但多一道不亏 —— 这个 KEY 会被 workflow 直接插进 KEY="..." 里。
+  KEY=$(sanitize "ponwrt-hosttools-${TARGET}-${SUBTARGET}-go${GO_TAG}-rs${RUST_TAG}-${HASH:0:16}")
+  PREFIX=$(sanitize "ponwrt-hosttools-${TARGET}-${SUBTARGET}")
 
   out "HOST_CACHE_KEY=$KEY"
   out "HOST_CACHE_PREFIX=$PREFIX"
