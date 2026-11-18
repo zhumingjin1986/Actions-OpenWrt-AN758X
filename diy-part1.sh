@@ -1,4 +1,4 @@
-#!/bin/bash
+false#!/bin/bash
 # ================================================================
 # diy-part1.sh —— 拉取可选插件到 package/custom
 # 运行目录: ponwrt 源码根目录（feeds 装完之后、加载 .config 之前）
@@ -22,11 +22,11 @@ ADD_AIROHA_NPU=true    # luci-app-airoha-npu：Airoha SoC 状态页（NPU/CPU/Fr
 ADD_FLUENT=true        # luci-theme-fluent：Fluent 2 风格主题
 ADD_FLUENT_LITE=false  # luci-theme-fluent-lite：轻量版（与 fluent 互斥，二选一）
 ADD_FLUENT_DASH=false  # luci-mod-fluentdashboard：可选状态概览卡片
-ADD_PASSWALL=true      # luci-app-passwall（只用 feeds 的依赖包）
+ADD_PASSWALL=false     # luci-app-passwall（只用 feeds 的依赖包）
 ADD_OPENCLASH=true     # luci-app-openclash ⚠ 依赖 Ruby/Rust，编译极慢
 ADD_MOSDNS=true        # luci-app-mosdns（本体只用 feeds 的 mosdns）
-ADD_LUCKY=true         # luci-app-lucky（DDNS + socat）
-ADD_TAILSCALE=true     # luci-app-tailscale（本体只用 feeds 的 tailscale）
+ADD_LUCKY=false        # luci-app-lucky（DDNS + socat）
+ADD_TAILSCALE=false    # luci-app-tailscale（本体只用 feeds 的 tailscale）
 ADD_OPENLIST=true      # luci-app-openlist2（alist/openlist 挂载）
 ADD_SMARTDNS=true      # luci-app-smartdns（本体只用 feeds 的 smartdns）
 ADD_EASYTIER=true      # luci-app-easytier（另需 kmod-tun + easytier 本体，Rust 编译较慢）
